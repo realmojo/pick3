@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { categories } from "@/lib/data";
 import {
-  KakaoPlace,
+  NaverLocalItem,
   Category,
   getCategoryImage,
   getShortAddress,
@@ -28,13 +28,28 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 
+function stripHtml(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, "")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function placeId(place: NaverLocalItem): string {
+  return `${place.mapx}_${place.mapy}`;
+}
+
+type PlaceWithImage = NaverLocalItem & { thumbnail?: string | null };
+
 export function MainPage() {
   const [featuredPlace, setFeaturedPlace] = useState<{
-    place: KakaoPlace;
+    place: PlaceWithImage;
     category: Category;
   } | null>(null);
   const [trendingPlaces, setTrendingPlaces] = useState<
-    { place: KakaoPlace; category: Category }[]
+    { place: PlaceWithImage; category: Category }[]
   >([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -44,8 +59,8 @@ export function MainPage() {
   const fetchFeatured = useCallback(async () => {
     try {
       const url = selectedRegion
-        ? `/api/places/featured?region=${encodeURIComponent(selectedRegion)}`
-        : "/api/places/featured";
+        ? `/api/naver/featured?region=${encodeURIComponent(selectedRegion)}`
+        : "/api/naver/featured";
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
@@ -57,17 +72,16 @@ export function MainPage() {
 
   const fetchTrending = useCallback(async () => {
     try {
-      // 각 카테고리에서 1개씩 가져와서 인기급상승으로 표시
       const allCategories: Category[] = ["cafe", "restaurant", "resort"];
-      const results: { place: KakaoPlace; category: Category }[] = [];
+      const results: { place: NaverLocalItem; category: Category }[] = [];
 
       for (const cat of allCategories) {
         const url = `/api/places/category/${cat}?size=1${selectedRegion ? `&region=${encodeURIComponent(selectedRegion)}` : ""}`;
         const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
-          if (data.documents?.length > 0) {
-            results.push({ place: data.documents[0], category: cat });
+          if (data.items?.length > 0) {
+            results.push({ place: data.items[0], category: cat });
           }
         }
       }
@@ -229,14 +243,17 @@ export function MainPage() {
           <Card className="overflow-hidden border-0 shadow-lg">
             <div className="relative h-48">
               <img
-                src={getCategoryImage(featuredPlace.category, 0)}
-                alt={featuredPlace.place.place_name}
+                src={featuredPlace.place.thumbnail || getCategoryImage(featuredPlace.category, 0)}
+                alt={stripHtml(featuredPlace.place.title)}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.src = getCategoryImage(featuredPlace.category, 0);
+                }}
               />
               <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-1.5">
                 <MapPin className="h-4 w-4 text-orange-600" />
                 <span className="text-sm font-medium text-gray-900">
-                  {getShortAddress(featuredPlace.place.address_name)}
+                  {getShortAddress(featuredPlace.place.address)}
                 </span>
               </div>
               <Button
@@ -257,30 +274,42 @@ export function MainPage() {
                 </Badge>
               </div>
               <h4 className="text-xl font-bold text-gray-900 mb-2">
-                {featuredPlace.place.place_name}
+                {stripHtml(featuredPlace.place.title)}
               </h4>
               <p className="text-gray-600 text-sm mb-1">
-                {featuredPlace.place.category_name}
+                {featuredPlace.place.category}
               </p>
-              {featuredPlace.place.road_address_name && (
+              {featuredPlace.place.roadAddress && (
                 <p className="text-gray-500 text-sm mb-1">
-                  {featuredPlace.place.road_address_name}
+                  {featuredPlace.place.roadAddress}
                 </p>
               )}
-              {featuredPlace.place.phone && (
+              {featuredPlace.place.telephone && (
                 <p className="text-gray-500 text-sm mb-4">
-                  {featuredPlace.place.phone}
+                  {featuredPlace.place.telephone}
                 </p>
               )}
-              <a
-                href={featuredPlace.place.place_url}
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                href={{
+                  pathname: `/category/${featuredPlace.category}/${placeId(featuredPlace.place)}`,
+                  query: {
+                    title: stripHtml(featuredPlace.place.title),
+                    category: featuredPlace.place.category,
+                    telephone: featuredPlace.place.telephone,
+                    address: featuredPlace.place.address,
+                    roadAddress: featuredPlace.place.roadAddress,
+                    link: featuredPlace.place.link,
+                    mapx: featuredPlace.place.mapx,
+                    mapy: featuredPlace.place.mapy,
+                    ...(featuredPlace.place.thumbnail ? { thumbnail: featuredPlace.place.thumbnail } : {}),
+                  },
+                }}
+                className="block w-full"
               >
                 <Button className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold">
                   자세히 보기
                 </Button>
-              </a>
+              </Link>
             </CardContent>
           </Card>
         ) : (
@@ -305,31 +334,45 @@ export function MainPage() {
         ) : (
           <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
             {trendingPlaces.map((item, idx) => (
-              <a
-                key={item.place.id}
-                href={item.place.place_url}
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                key={placeId(item.place)}
+                href={{
+                  pathname: `/category/${item.category}/${placeId(item.place)}`,
+                  query: {
+                    title: stripHtml(item.place.title),
+                    category: item.place.category,
+                    telephone: item.place.telephone,
+                    address: item.place.address,
+                    roadAddress: item.place.roadAddress,
+                    link: item.place.link,
+                    mapx: item.place.mapx,
+                    mapy: item.place.mapy,
+                    ...(item.place.thumbnail ? { thumbnail: item.place.thumbnail } : {}),
+                  },
+                }}
                 className="flex-shrink-0 w-40"
               >
                 <Card className="overflow-hidden border-0 shadow-md hover:shadow-lg transition-shadow">
                   <div className="relative h-28">
                     <img
-                      src={getCategoryImage(item.category, idx + 1)}
-                      alt={item.place.place_name}
+                      src={item.place.thumbnail || getCategoryImage(item.category, idx + 1)}
+                      alt={stripHtml(item.place.title)}
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = getCategoryImage(item.category, idx + 1);
+                      }}
                     />
                   </div>
                   <CardContent className="p-3">
                     <h4 className="font-semibold text-sm mb-1 truncate">
-                      {item.place.place_name}
+                      {stripHtml(item.place.title)}
                     </h4>
                     <p className="text-xs text-gray-500 truncate">
-                      {getShortAddress(item.place.address_name)}
+                      {getShortAddress(item.place.address)}
                     </p>
                   </CardContent>
                 </Card>
-              </a>
+              </Link>
             ))}
           </div>
         )}

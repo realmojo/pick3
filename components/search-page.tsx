@@ -2,11 +2,24 @@
 
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Search, MapPin, Phone, Loader2, Home, Compass, Heart, User } from 'lucide-react';
-import { KakaoPlace, getShortAddress, extractTags } from '@/lib/types';
+import { NaverLocalItem, getShortAddress } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Link from 'next/link';
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+function placeId(place: NaverLocalItem): string {
+  return `${place.mapx}_${place.mapy}`;
+}
 
 interface SearchPageProps {
   query: string;
@@ -14,7 +27,7 @@ interface SearchPageProps {
 
 export function SearchPage({ query: initialQuery }: SearchPageProps) {
   const [query, setQuery] = useState(initialQuery);
-  const [places, setPlaces] = useState<KakaoPlace[]>([]);
+  const [places, setPlaces] = useState<NaverLocalItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
@@ -32,7 +45,7 @@ export function SearchPage({ query: initialQuery }: SearchPageProps) {
       const res = await fetch(`/api/places/search?q=${encodeURIComponent(q)}&size=15`);
       if (!res.ok) throw new Error('Failed to search');
       const data = await res.json();
-      setPlaces(data.documents || []);
+      setPlaces(data.items || []);
     } catch (err) {
       console.error('Search error:', err);
     } finally {
@@ -92,18 +105,32 @@ export function SearchPage({ query: initialQuery }: SearchPageProps) {
             )}
             <div className="space-y-4">
               {places.map((place) => {
-                const tags = extractTags(place.category_name);
+                const title = stripHtml(place.title);
+                const categoryTags = place.category
+                  .split('>')
+                  .map((t) => t.trim())
+                  .filter(Boolean);
                 return (
-                  <a
-                    key={place.id}
-                    href={place.place_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <Link
+                    key={placeId(place)}
+                    href={{
+                      pathname: `/category/restaurant/${placeId(place)}`,
+                      query: {
+                        title,
+                        category: place.category,
+                        telephone: place.telephone,
+                        address: place.address,
+                        roadAddress: place.roadAddress,
+                        link: place.link,
+                        mapx: place.mapx,
+                        mapy: place.mapy,
+                      },
+                    }}
                   >
                     <Card className="border-0 shadow-md hover:shadow-lg transition-shadow mb-4">
                       <CardContent className="p-4">
                         <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          {tags.slice(0, 2).map((tag) => (
+                          {categoryTags.slice(-2).map((tag) => (
                             <span
                               key={tag}
                               className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full"
@@ -113,23 +140,23 @@ export function SearchPage({ query: initialQuery }: SearchPageProps) {
                           ))}
                         </div>
                         <h3 className="text-lg font-bold text-gray-900 mb-1">
-                          {place.place_name}
+                          {title}
                         </h3>
                         <div className="flex items-center gap-1.5 text-gray-500 mb-1">
                           <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
                           <span className="text-sm">
-                            {place.road_address_name || place.address_name}
+                            {place.roadAddress || place.address}
                           </span>
                         </div>
-                        {place.phone && (
+                        {place.telephone && (
                           <div className="flex items-center gap-1.5 text-gray-500">
                             <Phone className="h-3.5 w-3.5 flex-shrink-0" />
-                            <span className="text-sm">{place.phone}</span>
+                            <span className="text-sm">{place.telephone}</span>
                           </div>
                         )}
                       </CardContent>
                     </Card>
-                  </a>
+                  </Link>
                 );
               })}
             </div>

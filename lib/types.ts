@@ -38,21 +38,6 @@ export const REGIONS: Region[] = [
   "경북",
   "경남",
 ];
-export interface KakaoPlace {
-  id: string;
-  place_name: string;
-  category_name: string;
-  category_group_code: string;
-  category_group_name: string;
-  phone: string;
-  address_name: string;
-  road_address_name: string;
-  x: string;
-  y: string;
-  place_url: string;
-  distance: string;
-}
-
 export interface CategoryInfo {
   id: Category;
   name: string;
@@ -96,22 +81,6 @@ export function getCategoryImage(category: Category, index: number): string {
   return images[index % images.length];
 }
 
-// 카카오 카테고리에서 우리 카테고리로 매핑
-export function mapCategoryGroupCode(code: string): Category | null {
-  switch (code) {
-    case "CE7":
-      return "cafe";
-    case "FD6":
-      return "restaurant";
-    case "AT4":
-      return "resort";
-    case "AD5":
-      return "resort";
-    default:
-      return null;
-  }
-}
-
 // 주소에서 간단한 위치 추출 (구/동 단위)
 export function getShortAddress(address: string): string {
   const parts = address.split(" ");
@@ -122,13 +91,6 @@ export function getShortAddress(address: string): string {
     return `${parts[0]} ${parts[1]}`;
   }
   return address;
-}
-
-// 카테고리명에서 태그 추출
-export function extractTags(categoryName: string): string[] {
-  const parts = categoryName.split(" > ");
-  // 마지막 2개의 카테고리를 태그로 사용
-  return parts.slice(-2).map((p) => p.trim());
 }
 
 // 카테고리별 세부 필터 옵션
@@ -203,4 +165,60 @@ export interface FilterState {
   radius: number | null; // meters, null = no radius filter
   coords: Coords | null;
   page: number;
+}
+
+// Naver Blog Search API Types
+export interface NaverBlogItem {
+  title: string; // HTML 태그 포함된 제목
+  link: string; // 블로그 포스트 URL
+  description: string; // HTML 태그 포함된 요약
+  bloggername: string; // 블로거 이름
+  bloggerlink: string; // 블로그 URL
+  postdate: string; // YYYYMMDD 형식
+}
+
+export interface NaverBlogResponse {
+  lastBuildDate: string;
+  total: number;
+  start: number;
+  display: number;
+  items: NaverBlogItem[];
+}
+
+// Naver Local Search API Types
+export interface NaverLocalItem {
+  title: string; // HTML 태그 포함된 장소명
+  link: string; // 장소 관련 URL
+  category: string; // 카테고리 (예: "카페,디저트>카페")
+  description: string; // 설명
+  telephone: string; // 전화번호
+  address: string; // 지번 주소
+  roadAddress: string; // 도로명 주소
+  mapx: string; // x좌표 (카텍좌표)
+  mapy: string; // y좌표 (카텍좌표)
+}
+
+export interface NaverLocalResponse {
+  lastBuildDate: string;
+  total: number;
+  start: number;
+  display: number;
+  items: NaverLocalItem[];
+}
+
+// Naver Image Search API Types
+export interface NaverImageItem {
+  title: string; // HTML 태그 포함된 제목
+  link: string; // 이미지 원본 URL
+  thumbnail: string; // 썸네일 URL
+  sizeheight: string; // 이미지 높이
+  sizewidth: string; // 이미지 너비
+}
+
+export interface NaverImageResponse {
+  lastBuildDate: string;
+  total: number;
+  start: number;
+  display: number;
+  items: NaverImageItem[];
 }

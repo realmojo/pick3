@@ -5,15 +5,13 @@ export const runtime = "edge";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const keyword = searchParams.get("q");
-  const page = Number(searchParams.get("page")) || 1;
-  const size = Number(searchParams.get("size")) || 15;
+  const query = searchParams.get("query");
+  const display = searchParams.get("display") || "5";
+  const start = searchParams.get("start") || "1";
+  const sort = searchParams.get("sort") || "random"; // random, comment, date
 
-  if (!keyword) {
-    return NextResponse.json(
-      { error: "Missing query parameter: q" },
-      { status: 400 },
-    );
+  if (!query) {
+    return NextResponse.json({ error: "Query is required" }, { status: 400 });
   }
 
   const clientId = process.env.NAVER_CLIENT_ID;
@@ -27,8 +25,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const start = (page - 1) * size + 1;
-    const url = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(keyword)}&display=${size}&start=${start}&sort=random`;
+    const url = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=${display}&start=${start}&sort=${sort}`;
 
     const response = await fetch(url, {
       headers: {
@@ -42,18 +39,11 @@ export async function GET(request: Request) {
     }
 
     const data: NaverLocalResponse = await response.json();
-
-    return NextResponse.json({
-      items: data.items || [],
-      total: data.total,
-      start: data.start,
-      display: data.display,
-      isEnd: data.start + data.display > data.total,
-    });
+    return NextResponse.json(data);
   } catch (error) {
-    console.error("Naver API error:", error);
+    console.error("Naver Local API error:", error);
     return NextResponse.json(
-      { error: "Failed to search places" },
+      { error: "Failed to fetch local places" },
       { status: 500 },
     );
   }

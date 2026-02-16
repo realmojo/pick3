@@ -18,10 +18,9 @@ import {
 } from "lucide-react";
 import { categories } from "@/lib/data";
 import {
-  KakaoPlace,
+  NaverLocalItem,
   Category,
   getCategoryImage,
-  extractTags,
   CATEGORY_LABELS,
   SUB_FILTERS,
   Region,
@@ -40,11 +39,17 @@ const CATEGORY_SUBTITLES: Record<Category, string> = {
   resort: "엄선된 최고의 힐링 장소를 소개합니다.",
 };
 
-function formatDistance(meters: string): string {
-  const m = Number(meters);
-  if (!m) return "";
-  if (m < 1000) return `${m}m`;
-  return `${(m / 1000).toFixed(1)}km`;
+function stripHtml(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, "")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function placeId(place: NaverLocalItem): string {
+  return `${place.mapx}_${place.mapy}`;
 }
 
 interface CategoryPageProps {
@@ -52,11 +57,10 @@ interface CategoryPageProps {
   initialRegion?: string;
 }
 
-export function CategoryPage({
-  categoryId,
-  initialRegion,
-}: CategoryPageProps) {
-  const [places, setPlaces] = useState<KakaoPlace[]>([]);
+type PlaceWithImage = NaverLocalItem & { thumbnail?: string | null };
+
+export function CategoryPage({ categoryId, initialRegion }: CategoryPageProps) {
+  const [places, setPlaces] = useState<PlaceWithImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -79,26 +83,15 @@ export function CategoryPage({
     (page: number) => {
       const params = new URLSearchParams({
         size: String(filters.size),
-        sort: filters.sort,
+        sort: filters.sort === "distance" ? "comment" : "random",
         page: String(page),
       });
       if (filters.region) params.set("region", filters.region);
       if (filters.subFilter) params.set("sub", filters.subFilter);
 
-      // GPS 좌표
-      if (filters.useMyLocation && filters.coords) {
-        params.set("x", filters.coords.x);
-        params.set("y", filters.coords.y);
-        if (filters.radius) params.set("radius", String(filters.radius));
-        // 내 주변 모드: 키워드 없이 카테고리 코드만으로 검색
-        if (!filters.subFilter && !filters.region) {
-          params.set("mode", "nearby");
-        }
-      }
-
       return params;
     },
-    [filters]
+    [filters],
   );
 
   const fetchPlaces = useCallback(async () => {
@@ -106,13 +99,13 @@ export function CategoryPage({
     try {
       const params = buildParams(1);
       const res = await fetch(
-        `/api/places/category/${categoryId}?${params.toString()}`
+        `/api/places/category/${categoryId}?${params.toString()}`,
       );
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
-      setPlaces(data.documents || []);
-      setTotalCount(data.meta?.total_count || 0);
-      setIsEnd(data.meta?.is_end ?? true);
+      setPlaces(data.items || []);
+      setTotalCount(data.total || 0);
+      setIsEnd(data.isEnd ?? true);
     } catch (err) {
       console.error("Category fetch error:", err);
     } finally {
@@ -126,12 +119,12 @@ export function CategoryPage({
     try {
       const params = buildParams(nextPage);
       const res = await fetch(
-        `/api/places/category/${categoryId}?${params.toString()}`
+        `/api/places/category/${categoryId}?${params.toString()}`,
       );
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
-      setPlaces((prev) => [...prev, ...(data.documents || [])]);
-      setIsEnd(data.meta?.is_end ?? true);
+      setPlaces((prev) => [...prev, ...(data.items || [])]);
+      setIsEnd(data.isEnd ?? true);
       setFilters((f) => ({ ...f, page: nextPage }));
     } catch (err) {
       console.error("Load more error:", err);
@@ -182,18 +175,15 @@ export function CategoryPage({
     }
   };
 
-  // 서브필터 라벨
   const currentSubLabel = filters.subFilter
     ? SUB_FILTERS[categoryId].find((sf) => sf.keyword === filters.subFilter)
         ?.label
     : null;
 
-  // 반경 라벨
   const radiusLabel = filters.radius
     ? RADIUS_OPTIONS.find((r) => r.value === filters.radius)?.label
     : null;
 
-  // 활성 필터 칩
   const activeChips: { key: keyof FilterState; label: string }[] = [];
   if (filters.useMyLocation)
     activeChips.push({ key: "useMyLocation", label: "내 주변" });
@@ -357,31 +347,30 @@ export function CategoryPage({
         ) : (
           <div className="space-y-6">
             {places.map((place, index) => {
-              const tags = extractTags(place.category_name);
-              const dist = formatDistance(place.distance);
+              const title = stripHtml(place.title);
+              const categoryTags = place.category
+                .split(">")
+                .map((t) => t.trim())
+                .filter(Boolean);
               return (
                 <Card
-                  key={`${place.id}-${index}`}
+                  key={`${placeId(place)}-${index}`}
                   className="overflow-hidden border-0 shadow-lg"
                 >
                   <div className="relative h-56">
                     <img
-                      src={getCategoryImage(categoryId, index)}
-                      alt={place.place_name}
+                      src={place.thumbnail || getCategoryImage(categoryId, index)}
+                      alt={title}
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = getCategoryImage(categoryId, index);
+                      }}
                     />
                     <div className="absolute top-4 left-4">
                       <div className="bg-orange-500 text-white font-bold text-lg px-4 py-2 rounded-2xl">
                         {String(index + 1).padStart(2, "0")}
                       </div>
                     </div>
-                    {dist && (
-                      <div className="absolute top-4 right-14 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-full">
-                        <span className="text-xs font-semibold text-orange-600">
-                          {dist}
-                        </span>
-                      </div>
-                    )}
                     <Button
                       size="icon"
                       variant="ghost"
@@ -393,7 +382,7 @@ export function CategoryPage({
                   <CardContent className="p-5">
                     <div className="mb-3">
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        {tags.map((tag) => (
+                        {categoryTags.slice(-2).map((tag) => (
                           <span
                             key={tag}
                             className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full"
@@ -401,40 +390,47 @@ export function CategoryPage({
                             {tag}
                           </span>
                         ))}
-                        {dist && (
-                          <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-full">
-                            {dist}
-                          </span>
-                        )}
                       </div>
                       <h3 className="text-xl font-bold text-gray-900 mb-3">
-                        {place.place_name}
+                        {title}
                       </h3>
                       <p className="text-gray-600 text-sm mb-3 leading-relaxed">
-                        {place.category_name}
+                        {place.category}
                       </p>
                       <div className="flex items-center gap-1.5 text-gray-500 mb-2">
                         <MapPin className="h-4 w-4 flex-shrink-0" />
                         <span className="text-sm">
-                          {place.road_address_name || place.address_name}
+                          {place.roadAddress || place.address}
                         </span>
                       </div>
-                      {place.phone && (
+                      {place.telephone && (
                         <div className="flex items-center gap-1.5 text-gray-500 mb-4">
                           <Phone className="h-4 w-4 flex-shrink-0" />
-                          <span className="text-sm">{place.phone}</span>
+                          <span className="text-sm">{place.telephone}</span>
                         </div>
                       )}
                     </div>
-                    <a
-                      href={place.place_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <Link
+                      href={{
+                        pathname: `/category/${categoryId}/${placeId(place)}`,
+                        query: {
+                          title,
+                          category: place.category,
+                          telephone: place.telephone,
+                          address: place.address,
+                          roadAddress: place.roadAddress,
+                          link: place.link,
+                          mapx: place.mapx,
+                          mapy: place.mapy,
+                          ...(place.thumbnail ? { thumbnail: place.thumbnail } : {}),
+                        },
+                      }}
+                      className="block w-full"
                     >
                       <Button className="w-full h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold">
                         상세보기
                       </Button>
-                    </a>
+                    </Link>
                   </CardContent>
                 </Card>
               );
