@@ -1,6 +1,8 @@
 import { CategoryPage } from "@/components/category-page";
 import { Category } from "@/lib/types";
 
+export const runtime = "edge";
+
 export default async function Page({
   params,
   searchParams,
@@ -12,9 +14,6 @@ export default async function Page({
   const { region } = await searchParams;
 
   return (
-    <CategoryPage
-      categoryId={categoryId as Category}
-      initialRegion={region}
-    />
+    <CategoryPage categoryId={categoryId as Category} initialRegion={region} />
   );
 }

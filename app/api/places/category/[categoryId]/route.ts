@@ -5,6 +5,8 @@ import {
 } from "@/lib/kakao";
 import { Category } from "@/lib/types";
 
+export const runtime = "edge";
+
 const VALID_CATEGORIES: Category[] = ["cafe", "restaurant", "resort"];
 
 export async function GET(
@@ -46,8 +48,7 @@ export async function GET(
     }
 
     // 일반 키워드 기반 검색
-    const location =
-      x && y ? { x, y, radius } : undefined;
+    const location = x && y ? { x, y, radius } : undefined;
 
     const data = await searchPlacesByCategory(
       categoryId as Category,

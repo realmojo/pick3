@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { searchPlacesByCategory } from "@/lib/kakao";
 import { Category } from "@/lib/types";
 
+export const runtime = "edge";
+
 const CATEGORIES: Category[] = ["cafe", "restaurant", "resort"];
 
 export async function GET(request: Request) {
@@ -12,8 +14,7 @@ export async function GET(request: Request) {
   const radius = searchParams.get("radius")
     ? Number(searchParams.get("radius"))
     : undefined;
-  const location =
-    x && y ? { x, y, radius } : undefined;
+  const location = x && y ? { x, y, radius } : undefined;
 
   try {
     // 랜덤 카테고리에서 추천 장소 1개

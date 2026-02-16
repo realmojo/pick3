@@ -1,5 +1,7 @@
 import { SearchPage } from "@/components/search-page";
 
+export const runtime = "edge";
+
 export default async function Page({
   searchParams,
 }: {
@@ -7,5 +9,5 @@ export default async function Page({
 }) {
   const { q } = await searchParams;
 
-  return <SearchPage query={q || ''} />;
+  return <SearchPage query={q || ""} />;
 }
